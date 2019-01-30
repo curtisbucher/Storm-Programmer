@@ -8,26 +8,33 @@ Reset Arduino before each use. Wait for light to finish flashing
 """
 import serial
 import time
-try:
-    ## Creating Serial Connection
-    ser = serial.Serial('/dev/cu.usbmodem14101')
-    ##ser.open()
+
+
+## Creating Serial Connection
+ser = serial.Serial('/dev/cu.usbmodem14101')
+##ser.open()
+
+## Creating data bytearray, cannot be larger than 10 due to buffer size. 
+data = (1,1,2,3,4,144)
+print("Sending: " + str(list(data)))
+
+## Sending Data
+time.sleep(2)
+ser.write(data[:9])
+ser.write(b'\t')
+
+## Receiving Data
+ser.timeout = 2
+incoming = ser.read_until(terminator = b'\t')
+
+print("Receiving: " + str(list(incoming)))
+
+if not incoming:
+    print("Error: Nothing received. Try checking connection or resetting arduino")
+elif list(incoming) != list(data):
+    print("Error: Data Doesn't Match. Check Program, then hardware")
+else:
+    print("Success: " + str(len(data)) + " bytes sent.")
     
-    ## Creating data bytearray, cannot be larger than 10 due to buffer size. 
-    data = (1,1,2,3,4,5,223,7,8,8)
-    ##print(list(data))
-    
-    ## Sending Data
-    time.sleep(2)
-    print(ser.write(data[:10]))
-    
-    ## Receiving Data
-    ser.timeout = 2
-    incoming = ser.read_until(terminator = b'\t')
-    
-    print(list(incoming))
-    ser.close()
-    
-except Exception:
-    pass
-    ser.close()
+ser.close()
+
