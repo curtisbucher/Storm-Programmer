@@ -15,17 +15,17 @@ ser = serial.Serial('/dev/cu.usbmodem14101')
 ##ser.open()
 
 ## Creating data bytearray, cannot be larger than 10 due to buffer size. 
-data = (1,1,2,3,4,144)
+data = list(x for x in range(10,255)) * 100
 print("Sending: " + str(list(data)))
 
 ## Sending Data
 time.sleep(2)
-ser.write(data[:9])
+ser.write(data)
 ser.write(b'\t')
 
 ## Receiving Data
 ser.timeout = 2
-incoming = ser.read_until(terminator = b'\t')
+incoming = ser.read_until(terminator = b'\t')[:-1]
 
 print("Receiving: " + str(list(incoming)))
 
