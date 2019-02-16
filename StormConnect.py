@@ -10,112 +10,85 @@ import serial
 import time
 import os
 
-## ASCII control bytes
-START = b'\x12' #Start
-END = b'\x13' #End
-ENQ = b'\x15' # Enquire
-ACK = b'\x16' #Acknowledge
-CON1 = b'\x21' #Control 1
-CON2 = b'\x22' #Control 2
-CON3 = b'\x23' #Control 3
-ESC = b'\x2b' # Escape
+POS = '/x01'
+NEG = '/x00'
+BUFF = 8 ## Buffer length. Size of transmissions
 
-def write():
-    ## Getting file to write from. Data is a long string of hex characters
-    filename = input("File: ")
-    with open(filename, "r") as f:
-        data = f.read()
+def read(start_addr, end_addr, buffer_size, file):
+    """Commanding arduino to read data to `file` from ROM from [start_addr]
+    to [end_addr].
+    """
+    ser.write(POS, start_addr, end_addr, buffer_size)
     
-    #Converting to list of decimal numbers
-    data = [int(d,16) for d in data]
+    ## Receiving data from arduino. The size of each transmission is sent in
+    ## first byte.
+    received = []
+    while len(received < start_addr - end_addr):
+        message_length = ser.read()
+        received += ser.read(len=message_length)
+        
+        ## Indicating that the CPU is ready or more data
+        ser.write(POS)
     
-    print("Writing " + str(len(data)) + " bytes to ROM from " + filename + "...\n")
+    ## Writing received data to file
+    with open(file, "w") as data:
+        data.write(received)
 
-    #Initiating Connection
-    ser.write(START)
+def write(start_addr, end_addr, buffer_size, file):
+    """Commanding arduino to write data from `file` into ROM from [start_addr]
+    to [end_addr].
+    """
     
-    #Sending data packets, 9 bytes at a time, ending with control
-    for x in range(0,len(data),9):
-        print(data[x:x+9])
-        ser.write(data[x:x+9])
-        ser.write(b'\t')
-        
-        if ser.read() != ACK: raise ConnectionError("Connection Disrupted")
-        
-    #Sending last bit of data
-    ser.write(data[x:])
-    ser.write(b'\t')
-    if ser.read() != ACK: raise ConnectionError("Connection Disrupted")
+    ser.write(NEG, start_addr, end_addr, buffer_size)
     
-    #Ending write cycle
-    ser.write(END)
+    ## Reading data from file to write to ROM
+    with open(file, "r") as d:
+        data = d.read()
+        
+    ## Sending data in `buffer-size` peices, each with a header to
+    ## indicate message size
+    while len(data) > buffer_size:
+        ser.write(buffer_size)
+        ser.write(data[-buffer_size:])
+        
+        ## Indicating that the arduino is ready for more data
+        ser.read()
+    
+    ## Sending the last little bit let over
+    ser.write(len(data))
+    ser.write(data)
 
-def byteRead():
-    
-    ser.write(int(input("Address: ")))
-    byte = ser.read()
-    
-    ser.write(ESC)
-    ser.read()
-    print(int(byte))
 
-def pageRead():
-    incoming = []
-    ser.write(START)
-    
-    while True:
-        received = ser.read()
-        
-        if received == END:
-            break
-        
-        if received != b'\t':
-            incoming += received##_until(terminator = b'\t')
-            
-        #ser.write(ACK)
-        
-
-    print(incoming)
-        
-        
-    
-    
 
 ## Creating Serial Connection
 ser = serial.Serial('/dev/cu.usbmodem14101')
 time.sleep(2)
-#os.system("clear")
+
+
+os.system("clear")
 print("LightningStorm 0.2.0")
 print("--------------------")
 
 ## Establishing Connection
 print("Connecting...")
-ser.write(ENQ)
-if ser.read() != ACK:
+ser.write(POS)
+if ser.read() != POS:
     raise ConnectionError("Connection Refused")
 print("Connected!\n")
 
 ## Getting user request
-user_in = input("Read/Write: ")
-if user_in.lower() == "read":
-    
-    user_in = input("Byte Read or Page Read: ")
-    if "byte" in user_in.lower():
-        ser.write(CON2)
-        ser.read()
-        byteRead()
-    elif "page" in user_in.lower():
-        ser.write(CON1)
-        ser.read()
-        pageRead()
+operation = input("Read/Write: ")
+start_addr = input("Start Address: ")
+end_addr = input("End Address: ")
 
-elif user_in.lower() == "write":
-    ser.write(CON3)
-    ser.read()
-    write()
-    
+if "read" in operation.lower():
+    filename = input("File to read to: ")
+    read(start_addr, end_addr, BUFF)
+
+elif "write" in operation.lower():
+    filename = input("File to write from: ")
+    write(start_addr, end_addr, BUFF)
+
 print("\n")
-
-
 ser.close()
 
