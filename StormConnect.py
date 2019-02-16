@@ -8,114 +8,82 @@ Reset Arduino before each use. Wait for light to finish flashing
 """
 import serial
 import time
-import os
 
-## ASCII control bytes
-START = b'\x12' #Start
-END = b'\x13' #End
-ENQ = b'\x15' # Enquire
-ACK = b'\x16' #Acknowledge
-CON1 = b'\x21' #Control 1
-CON2 = b'\x22' #Control 2
-CON3 = b'\x23' #Control 3
-ESC = b'\x2b' # Escape
 
-def write():
-    ## Getting file to write from. Data is a long string of hex characters
-    filename = input("File: ")
-    with open(filename, "r") as f:
-        data = f.read()
-    
-    #Converting to list of decimal numbers
-    data = [int(d,16) for d in data]
-    
-    print("Writing " + str(len(data)) + " bytes to ROM from " + filename + "...\n")
+# Word header. Word = [header, byte]
+COMMAND = b"\xff"  # Used to signal that the following byte is a command
+DATA = b"\x00"  # Used to signal that the following byte is data
 
-    #Initiating Connection
-    ser.write(START)
-    
-    #Sending data packets, 9 bytes at a time, ending with control
-    for x in range(0,len(data),9):
-        print(data[x:x+9])
-        ser.write(data[x:x+9])
-        ser.write(b'\t')
-        
-        if ser.read() != ACK: raise ConnectionError("Connection Disrupted")
-        
-    #Sending last bit of data
-    ser.write(data[x:])
-    ser.write(b'\t')
-    if ser.read() != ACK: raise ConnectionError("Connection Disrupted")
-    
-    #Ending write cycle
-    ser.write(END)
+# Commands
+NEG = b"\x00"  # Negetive
+POS = b"\x01"  # Positive
 
-def byteRead():
-    
-    ser.write(int(input("Address: ")))
-    byte = ser.read()
-    
-    ser.write(ESC)
+
+def connect():
+    ser.write(COMMAND + POS)
+    received = ser.read(size=2)
+    if received != COMMAND + POS:
+        raise ConnectionError("Connection Refused")
+    print("Connected!")
+
+
+def writePage():
+    pass
+
+
+def readPage():
+    pass
+
+
+def writeByte():
+    pass
+
+
+def readByte():
+    address = int(input("Address: "))
+    ser.write(DATA)
+    ser.write(address)
     ser.read()
-    print(int(byte))
+    received = ser.read()
+    print("Data at", address, ":",received)
 
-def pageRead():
-    incoming = []
-    ser.write(START)
-    
-    while True:
-        received = ser.read()
-        
-        if received == END:
-            break
-        
-        if received != b'\t':
-            incoming += received##_until(terminator = b'\t')
-            
-        #ser.write(ACK)
-        
-
-    print(incoming)
-        
-        
-    
-    
-
-## Creating Serial Connection
-ser = serial.Serial('/dev/cu.usbmodem14101')
+# Creating Serial Connection
+ser = serial.Serial("/dev/cu.usbmodem14101")
 time.sleep(2)
-#os.system("clear")
+# os.system("clear")
 print("LightningStorm 0.2.0")
 print("--------------------")
 
-## Establishing Connection
+# Establishing Connection
 print("Connecting...")
-ser.write(ENQ)
-if ser.read() != ACK:
-    raise ConnectionError("Connection Refused")
-print("Connected!\n")
+connect()
 
-## Getting user request
+# Getting user request
 user_in = input("Read/Write: ")
 if user_in.lower() == "read":
-    
+    ser.write(COMMAND + NEG)
     user_in = input("Byte Read or Page Read: ")
     if "byte" in user_in.lower():
-        ser.write(CON2)
-        ser.read()
-        byteRead()
+        ser.write(COMMAND + POS)
+        ser.read(size=2)
+        readByte()
     elif "page" in user_in.lower():
-        ser.write(CON1)
-        ser.read()
-        pageRead()
+        ser.write(COMMAND + NEG)
+        ser.read(size=2)
+        readPage()
 
 elif user_in.lower() == "write":
-    ser.write(CON3)
-    ser.read()
-    write()
-    
+    ser.write(COMMAND + POS)
+    user_in = input("Byte Write or Page Write: ")
+    if "byte" in user_in.lower():
+        ser.write(COMMAND + POS)
+        ser.read(size=2)
+        writeByte()
+    elif "page" in user_in.lower():
+        ser.write(COMMAND + NEG)
+        ser.read(size=2)
+        writePage()
 print("\n")
 
 
 ser.close()
-
