@@ -17,12 +17,21 @@ def read(start_addr, end_addr, file=None):
     """Commanding arduino to read data to `file` from ROM from [start_addr]
     to [end_addr].
     """
-    ser.write([1, start_addr, end_addr])
     
+    ## Sending command to arduino uno, as well as 2, 8 bit addresses for start_addr and end_addr respectively
+    start_addrA = start_addr//256
+    start_addrB = start_addr%256
+    
+    end_addrA = end_addr//256
+    end_addrB = end_addr%256
+    
+    ser.write([1, start_addrA, start_addrB, end_addrA, end_addrB])
+
     ## Receiving data from arduino. The size of each transmission is sent in
     ## first byte.
-    received = ser.read(size = end_addr- start_addr)
-        
+    received = ser.read(size = end_addr - start_addr)
+    
+          
     ## Indicating that the CPU is ready or more data
     ser.write(POS)
     
@@ -44,7 +53,15 @@ def write(start_addr, end_addr, file):
     """Commanding arduino to write data from `file` into ROM from [start_addr]
     to [end_addr].
     """
-    ser.write([0, start_addr, end_addr])
+    
+    ## Sending 16 bit addresses and command
+    start_addrA = start_addr//256
+    start_addrB = start_addr%256
+    
+    end_addrA = end_addr//256
+    end_addrB = end_addr%256
+    
+    ser.write([0, start_addrA, start_addrB , end_addrA, end_addrB])
     
     ## Reading data from file to write to ROM
     with open(file, "r") as d:
@@ -56,22 +73,32 @@ def write(start_addr, end_addr, file):
     data = data[0:end_addr - start_addr]
     
     ## Must be sent in batches of 64, then wait for conformation
+    print("\nSending Data...")
     print("-" * (((end_addr-start_addr)//64)+1))
     for a in range(start_addr, end_addr-64, 64):
         ser.write(data[a:a+64])
         ser.read()
         print("*",end="")
-        
+    
     ser.write(data[a+64:end_addr])
     ser.read()
-    print("*")
+    print("*\n")
     
     ##Checking Data
     received = read(start_addr, end_addr)
     
-    print("\nSuccess!", len(data), "bytes sent!")
+    if received == data:
+        accuracy = 100
+    else:
+        missed = 0
+        for x in range(len(received)):
+            if received[x] != data[x]:
+                missed += 1
+        accuracy = int((len(received) - missed)/len(received)*10000)/100
+                
+    print("\nBytes Sent:", len(data))
+    print("Accuracy:", str(accuracy)+"%")
     
-    print("Sent:",data)
     
 ## Creating Serial Connection
 ser = serial.Serial('/dev/cu.usbmodem14101')
@@ -112,4 +139,3 @@ while True:
 
 print("\n")
 ser.close()
-
