@@ -13,7 +13,7 @@ import os
 POS = b'\x01'
 NEG = b'\x00'
 
-def read(start_addr, end_addr, file):
+def read(start_addr, end_addr, file=None):
     """Commanding arduino to read data to `file` from ROM from [start_addr]
     to [end_addr].
     """
@@ -27,21 +27,23 @@ def read(start_addr, end_addr, file):
     ser.write(POS)
     
     ## Writing received data to file
-    print("Data: ",list(received))
+    received_list = list(received)
+    print("Data: ", received_list)
     
     ## Converting to hex to write to file
     received = [hex(x)[2:] for x in received]
     received = ' '.join(received)
     
     ##Converting to hex to write to file
-    with open(file, "w") as data:
-        data.write(received)
-
+    if file:
+        with open(file, "w") as data:
+            data.write(received)
+            
+    return received_list
 def write(start_addr, end_addr, file):
     """Commanding arduino to write data from `file` into ROM from [start_addr]
     to [end_addr].
     """
-    
     ser.write([0, start_addr, end_addr])
     
     ## Reading data from file to write to ROM
@@ -52,21 +54,31 @@ def write(start_addr, end_addr, file):
     data = data.split(' ')
     data = [int(x,16) for x in data]
     data = data[0:end_addr - start_addr]
-    ser.write(data)
-    ser.read()
-    print("Success!", len(data), "bytes sent!")
-    print(data)
     
-
-
-
+    ## Must be sent in batches of 64, then wait for conformation
+    print("-" * (((end_addr-start_addr)//64)+1))
+    for a in range(start_addr, end_addr-64, 64):
+        ser.write(data[a:a+64])
+        ser.read()
+        print("*",end="")
+        
+    ser.write(data[a+64:end_addr])
+    ser.read()
+    print("*")
+    
+    ##Checking Data
+    received = read(start_addr, end_addr)
+    
+    print("\nSuccess!", len(data), "bytes sent!")
+    
+    print("Sent:",data)
+    
 ## Creating Serial Connection
 ser = serial.Serial('/dev/cu.usbmodem14101')
 time.sleep(2)
 
-
-#os.system("clear")
-print("LightningStorm 0.2.0")
+os.system("clear")
+print("LightningStorm 0.3.0")
 print("--------------------")
 
 ## Establishing Connection
@@ -76,18 +88,27 @@ if ser.read() != POS:
     raise ConnectionError("Connection Refused")
 print("Connected!\n")
 
-## Getting user request
-operation = input("Read/Write: ")
-start_addr = int(input("Start Address: ")) ## Add support for 16 bit addressing
-end_addr = int(input("End Address: "))
+while True:
+    ## Getting user request
+    operation = input("Read/Write: ")
 
-if "read" in operation.lower():
-    filename = input("File to read to: ")
-    read(start_addr, end_addr, filename)
-
-elif "write" in operation.lower():
-    filename = input("File to write from: ")
-    write(start_addr, end_addr, filename)
+    if "read" in operation.lower():
+        start_addr = int(input("Start Address: ")) ## Add support for 16 bit addressing
+        end_addr = int(input("End Address: "))
+        filename = input("File to read to: ")
+        
+        read(start_addr, end_addr, filename)
+    
+    elif "write" in operation.lower():
+        start_addr = int(input("Start Address: ")) ## Add support for 16 bit addressing
+        end_addr = int(input("End Address: "))
+        filename = input("File to write from: ")
+        
+        write(start_addr, end_addr, filename)
+        
+    else:
+        print("Ending...")
+        break
 
 print("\n")
 ser.close()
